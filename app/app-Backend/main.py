@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from core.database import connect_to_mongo, close_mongo_connection
 from core.routes import api_router
 from middleware.auth_middleware import AuthMiddleware
+from chatbot.enhanced_routes import router as chatbot_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -27,6 +28,7 @@ app.add_middleware(
 
 # Routes
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(chatbot_router, prefix="/api/v1")
 
 @app.get("/")
 async def root():

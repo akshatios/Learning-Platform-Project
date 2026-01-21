@@ -17,4 +17,4 @@ api_router.include_router(stats_router, prefix="/auth", tags=["User Stats"])
 api_router.include_router(email_router, prefix="/auth", tags=["Email Verification"])
 api_router.include_router(user_mgmt_router, prefix="/users", tags=["User Management"])
 api_router.include_router(course_router, tags=["Courses"])
-api_router.include_router(payment_router, tags=["Payment"])  # Remove prefix since courseRoute.py already has it
+api_router.include_router(payment_router, tags=["Payment"])

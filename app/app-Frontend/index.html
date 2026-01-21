@@ -296,5 +296,62 @@
 
     <script src="https://js.stripe.com/v3/"></script>
     <script src="script.js"></script>
+    
+    <!-- Chatbot Widget -->
+    <link rel="stylesheet" href="chatbot.css">
+    <script src="chatbot.js"></script>
+    
+    <!-- Enhanced Chatbot Widget -->
+    <div id="chatbot-widget" class="chatbot-widget">
+        <div id="chatbot-toggle" class="chatbot-toggle">
+            <i class="fas fa-robot"></i>
+            <div class="notification-badge" id="chatbot-notification">1</div>
+        </div>
+        
+        <div id="chatbot-container" class="chatbot-container hidden">
+            <div class="chatbot-header">
+                <div class="header-info">
+                    <i class="fas fa-robot"></i>
+                    <div>
+                        <h4>Learning Assistant</h4>
+                        <span class="status-indicator">Online</span>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button id="chatbot-clear" class="header-btn" title="Clear Chat">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                    <button id="chatbot-close" class="header-btn" title="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="chatbot-messages" class="chatbot-messages">
+                <!-- Messages will be loaded here -->
+            </div>
+            
+            <div id="quick-actions" class="quick-actions">
+                <!-- Quick action buttons will be added here -->
+            </div>
+            
+            <div class="chatbot-input-container">
+                <div class="input-wrapper">
+                    <textarea 
+                        id="chatbot-input" 
+                        placeholder="Type your message..." 
+                        rows="1"
+                        maxlength="1000"
+                    ></textarea>
+                    <button id="chatbot-send" class="send-btn">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                <div class="input-footer">
+                    <small>Powered by AI • Press Enter to send</small>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

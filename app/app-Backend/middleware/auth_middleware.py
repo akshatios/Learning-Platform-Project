@@ -7,10 +7,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Skip auth for public endpoints
         public_paths = ["/", "/docs", "/redoc", "/openapi.json", "/favicon.ico", "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/verify-email", "/api/v1/auth/logout", "/api/v1/auth/users/stats", "/api/v1/users/students", "/api/v1/users/teachers"]
         
-        # Skip auth for upload endpoints, course creation, and payment endpoints
+        # Skip auth for upload endpoints, course creation, payment endpoints, and chatbot
         if (request.url.path.startswith("/api/v1/upload/") or 
             request.url.path.startswith("/api/v1/courses/") or
-            request.url.path.startswith("/api/v1/payment/")):
+            request.url.path.startswith("/api/v1/payment/") or
+            request.url.path.startswith("/api/v1/chatbot/")):
             response = await call_next(request)
             return response
         

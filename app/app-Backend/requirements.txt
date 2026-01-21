@@ -11,3 +11,6 @@ cloudinary==1.36.0
 redis==5.0.1
 werkzeug==3.0.1
 stripe==5.5.0
+
+# Chatbot Dependencies
+requests==2.31.0
