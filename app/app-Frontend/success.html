@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Success - Learning Platform</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="success-container">
+        <div class="success-card">
+            <div class="success-icon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <h1>Payment Successful!</h1>
+            <p>Thank you for your purchase. You have been successfully enrolled in the course.</p>
+            
+            <div class="success-details">
+                <div class="detail-item">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span>Course access granted</span>
+                </div>
+                <div class="detail-item">
+                    <i class="fas fa-envelope"></i>
+                    <span>Confirmation email sent</span>
+                </div>
+                <div class="detail-item">
+                    <i class="fas fa-certificate"></i>
+                    <span>Certificate available upon completion</span>
+                </div>
+            </div>
+            
+            <div class="success-actions">
+                <button onclick="window.location.href='index.html'" class="btn btn-primary">
+                    <i class="fas fa-home"></i> Go to Dashboard
+                </button>
+                <button onclick="startLearning()" class="btn btn-secondary">
+                    <i class="fas fa-play"></i> Start Learning
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get session ID from URL and verify payment
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('session_id');
+        
+        if (sessionId) {
+            // Store session ID and redirect to main app
+            localStorage.setItem('pending_session_id', sessionId);
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 2000);
+        }
+        
+        function startLearning() {
+            window.location.href = 'index.html#courses';
+        }
+        
+        // Auto redirect after 5 seconds
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 5000);
+    </script>
+</body>
+</html>

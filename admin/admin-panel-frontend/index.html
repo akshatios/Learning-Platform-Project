@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Learning Platform</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Loading Spinner -->
+    <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Login Page -->
+    <div id="login-page" class="page active">
+        <div class="auth-container">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h1><i class="fas fa-shield-alt"></i> Admin Panel</h1>
+                    <p>Learning Platform Administration</p>
+                </div>
+                <form id="login-form" class="auth-form">
+                    <div class="form-group">
+                        <label for="login-email">Email</label>
+                        <input type="email" id="login-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Page -->
+    <div id="dashboard-page" class="page">
+        <nav class="navbar">
+            <div class="nav-brand">
+                <i class="fas fa-shield-alt"></i>
+                Admin Panel
+            </div>
+            <div class="nav-user">
+                <span id="user-name">Welcome, Admin</span>
+                <button id="logout-btn" class="btn btn-secondary">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+        </nav>
+
+        <div class="dashboard-container">
+            <div class="dashboard-header">
+                <h1>Course Management</h1>
+                <button id="create-course-btn" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Create Course
+                </button>
+            </div>
+
+            <!-- Course Creation Form -->
+            <div id="course-form-container" class="form-container hidden">
+                <div class="form-card">
+                    <h2>Create New Course</h2>
+                    <form id="course-form">
+                        <div class="form-group">
+                            <label for="course-title">Course Title</label>
+                            <input type="text" id="course-title" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="course-description">Description</label>
+                            <textarea id="course-description" rows="4" required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="course-thumbnail">Course Thumbnail</label>
+                            <input type="file" id="course-thumbnail" accept="image/*">
+                        </div>
+                        <div class="form-group">
+                            <label for="course-price">Price ($)</label>
+                            <input type="number" id="course-price" min="0" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="teacher-id">Teacher ID</label>
+                            <input type="text" id="teacher-id" required>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" id="cancel-course" class="btn btn-secondary">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Create Course</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Video Upload Form -->
+            <div id="video-form-container" class="form-container hidden">
+                <div class="form-card">
+                    <h2>Add Video to Course</h2>
+                    <form id="video-form">
+                        <input type="hidden" id="video-course-id">
+                        <div class="form-group">
+                            <label for="video-title">Video Title</label>
+                            <input type="text" id="video-title" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="video-description">Video Description</label>
+                            <textarea id="video-description" rows="3" required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="video-file">Video File</label>
+                            <input type="file" id="video-file" accept="video/*" required>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" id="cancel-video" class="btn btn-secondary">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Upload Video</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Courses List -->
+            <div class="table-container">
+                <h2>All Courses</h2>
+                <div id="courses-grid" class="courses-grid">
+                    <div class="no-data">Loading courses...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

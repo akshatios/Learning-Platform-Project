@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from course.views.curd.create_course import create_course
-from course.views.curd.add_video_course import add_video_to_course
+from course.views.curd.add_video_course import add_video_to_course, get_course_videos
 from course.views.curd.get_courses import get_courses, get_teacher_courses, search_courses
 from course.views.curd.delete_course import delete_course
 from course.views.curd.update_course import update_course
@@ -13,6 +13,7 @@ router.add_api_route("/all", get_courses, methods=["GET"])  # For student dashbo
 router.add_api_route("/create", create_course, methods=["POST"])
 router.add_api_route("/update", update_course, methods=["PUT"])
 router.add_api_route("/add-video", add_video_to_course, methods=["POST"])
+router.add_api_route("/videos/{course_id}", get_course_videos, methods=["GET"])
 router.add_api_route("/delete", delete_course, methods=["DELETE"])
 
 # Teacher specific routes

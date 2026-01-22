@@ -225,9 +225,40 @@
                             <label for="course-price">Price ($)</label>
                             <input type="number" id="course-price" min="0" step="0.01" required>
                         </div>
+                        <div class="form-group">
+                            <label for="course-videos">Course Videos (Optional)</label>
+                            <input type="file" id="course-videos" accept="video/*" multiple>
+                            <small>You can select multiple video files</small>
+                        </div>
                         <div class="form-actions">
                             <button type="button" id="cancel-course" class="btn btn-secondary">Cancel</button>
                             <button type="submit" class="btn btn-primary">Create Course</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Video Upload Form -->
+            <div id="video-form-container" class="form-container hidden">
+                <div class="form-card">
+                    <h2>Add Video to Course</h2>
+                    <form id="video-form">
+                        <input type="hidden" id="video-course-id">
+                        <div class="form-group">
+                            <label for="video-title">Video Title</label>
+                            <input type="text" id="video-title" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="video-description">Video Description</label>
+                            <textarea id="video-description" rows="3" required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="video-file">Video File</label>
+                            <input type="file" id="video-file" accept="video/*" required>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" id="cancel-video" class="btn btn-secondary">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Upload Video</button>
                         </div>
                     </form>
                 </div>
@@ -287,6 +318,9 @@
             <!-- Available Courses -->
             <div class="section">
                 <h2>Available Courses</h2>
+                <div class="payment-help">
+                    <p><i class="fas fa-info-circle"></i> After payment, copy the session ID from URL and use "Verify Payment" button</p>
+                </div>
                 <div id="available-courses" class="courses-grid">
                     <div class="no-data">Loading courses...</div>
                 </div>
@@ -295,11 +329,9 @@
     </div>
 
     <script src="https://js.stripe.com/v3/"></script>
-    <script src="script.js"></script>
     
     <!-- Chatbot Widget -->
     <link rel="stylesheet" href="chatbot.css">
-    <script src="chatbot.js"></script>
     
     <!-- Enhanced Chatbot Widget -->
     <div id="chatbot-widget" class="chatbot-widget">
@@ -353,5 +385,8 @@
             </div>
         </div>
     </div>
+    
+    <script src="script.js"></script>
+    <script src="chatbot.js"></script>
 </body>
 </html>

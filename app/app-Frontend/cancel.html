@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Cancelled - Learning Platform</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="cancel-container">
+        <div class="cancel-card">
+            <div class="cancel-icon">
+                <i class="fas fa-times-circle"></i>
+            </div>
+            <h1>Payment Cancelled</h1>
+            <p>Your payment was cancelled. No charges were made to your account.</p>
+            
+            <div class="cancel-details">
+                <div class="detail-item">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>Your payment information is secure</span>
+                </div>
+                <div class="detail-item">
+                    <i class="fas fa-redo"></i>
+                    <span>You can try again anytime</span>
+                </div>
+                <div class="detail-item">
+                    <i class="fas fa-question-circle"></i>
+                    <span>Contact support if you need help</span>
+                </div>
+            </div>
+            
+            <div class="cancel-actions">
+                <button onclick="window.location.href='index.html'" class="btn btn-primary">
+                    <i class="fas fa-home"></i> Back to Dashboard
+                </button>
+                <button onclick="tryAgain()" class="btn btn-secondary">
+                    <i class="fas fa-credit-card"></i> Try Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function tryAgain() {
+            // Redirect back to courses page
+            window.location.href = 'index.html';
+        }
+        
+        // Auto redirect after 10 seconds
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 10000);
+    </script>
+</body>
+</html>

@@ -105,6 +105,7 @@ async function login(credentials) {
         }
         
         currentUser = result.user;
+        localStorage.setItem('currentUser', JSON.stringify(result.user));
         document.getElementById('user-name').textContent = `Welcome, ${result.user.name}`;
         
         // Set role badge
@@ -114,6 +115,11 @@ async function login(credentials) {
         
         showPage('dashboard-page');
         showRoleBasedDashboard(result.user.role);
+        
+        // Check for pending payment verification
+        setTimeout(() => {
+            handlePaymentSuccess();
+        }, 1000);
         
         return result;
     } catch (error) {
@@ -150,7 +156,7 @@ async function loadTeacherData() {
 
 async function loadTeacherCourses() {
     try {
-        const result = await apiCall(`/courses/teacher/${currentUser.id}`);
+        const result = await apiCall(`/courses/teacher/${currentUser.id}?token=${localStorage.getItem('token')}`);
         const coursesContainer = document.getElementById('teacher-courses');
         
         if (result.courses && result.courses.length > 0) {
@@ -169,6 +175,9 @@ async function loadTeacherCourses() {
                     <div class="course-actions">
                         <button class="btn btn-edit" onclick="editCourse('${course._id}')">
                             <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button class="btn btn-success" onclick="addVideo('${course._id}')">
+                            <i class="fas fa-video"></i> Add Video
                         </button>
                         <button class="btn btn-delete" onclick="deleteCourse('${course._id}')">
                             <i class="fas fa-trash"></i> Delete
@@ -237,6 +246,15 @@ async function createCourse(courseData) {
         
         showToast('Course created successfully', 'success');
         
+        console.log('Course creation result:', result);
+        
+        // Upload videos if any
+        if (courseData.videos && courseData.videos.length > 0) {
+            showToast('Uploading videos...', 'info');
+            console.log('Course ID for videos:', result.id);
+            await uploadCourseVideos(result.id, courseData.videos);
+        }
+        
         // Hide form and reload courses
         document.getElementById('course-form-container').classList.add('hidden');
         document.getElementById('course-form').reset();
@@ -277,11 +295,16 @@ async function loadEnrolledCourses() {
                 <div class="course-card">
                     <div class="course-header">
                         <h3 class="course-title">${enrollment.course_title}</h3>
-                        <span class="course-price">Enrolled</span>
+                        <span class="course-price enrolled-badge">Enrolled</span>
                     </div>
                     <div class="course-meta">
-                        <span>Progress: ${enrollment.progress || 0}%</span>
-                        <span>Enrolled: ${new Date(enrollment.enrolled_at).toLocaleDateString()}</span>
+                        <span><i class="fas fa-chart-line"></i> Progress: ${enrollment.progress || 0}%</span>
+                        <span><i class="fas fa-calendar"></i> ${new Date(enrollment.enrolled_at).toLocaleDateString()}</span>
+                    </div>
+                    <div class="course-actions">
+                        <button class="btn btn-primary" onclick="startCourse('${enrollment.course_id}')">
+                            <i class="fas fa-play"></i> Continue Learning
+                        </button>
                     </div>
                 </div>
             `).join('');
@@ -296,27 +319,46 @@ async function loadEnrolledCourses() {
 async function loadAvailableCourses() {
     try {
         console.log('Loading available courses...');
-        const result = await apiCall('/courses/all');
-        console.log('API Response:', result);
+        const [coursesResult, enrollmentsResult] = await Promise.all([
+            apiCall('/courses/all'),
+            apiCall(`/courses/student/${currentUser.id}`)
+        ]);
+        
+        console.log('API Response:', coursesResult);
         
         const coursesContainer = document.getElementById('available-courses');
         
-        if (result.courses && result.courses.length > 0) {
-            console.log(`Found ${result.courses.length} courses`);
-            coursesContainer.innerHTML = result.courses.map(course => `
-                <div class="course-card">
-                    <div class="course-header">
-                        <h3 class="course-title">${course.title}</h3>
-                        <span class="course-price">₹${course.price}</span>
+        if (coursesResult.courses && coursesResult.courses.length > 0) {
+            // Get enrolled course IDs
+            const enrolledCourseIds = enrollmentsResult.enrollments ? 
+                enrollmentsResult.enrollments.map(e => e.course_id) : [];
+            
+            // Filter out enrolled courses
+            const availableCourses = coursesResult.courses.filter(
+                course => !enrolledCourseIds.includes(course._id)
+            );
+            
+            if (availableCourses.length > 0) {
+                coursesContainer.innerHTML = availableCourses.map(course => `
+                    <div class="course-card">
+                        <div class="course-header">
+                            <h3 class="course-title">${course.title}</h3>
+                            <span class="course-price">₹${course.price}</span>
+                        </div>
+                        <p class="course-description">${course.description}</p>
+                        <div class="course-actions">
+                            <button class="btn btn-enroll" onclick="initiatePayment('${course._id}', ${course.price})">
+                                <i class="fas fa-credit-card"></i> Buy Now
+                            </button>
+                            <button class="btn btn-secondary" onclick="manualVerifyPayment()" style="display:none;" id="verify-btn-${course._id}">
+                                <i class="fas fa-check"></i> Verify Payment
+                            </button>
+                        </div>
                     </div>
-                    <p class="course-description">${course.description}</p>
-                    <div class="course-actions">
-                        <button class="btn btn-enroll" onclick="initiatePayment('${course._id}', ${course.price})">
-                            <i class="fas fa-credit-card"></i> Buy Now
-                        </button>
-                    </div>
-                </div>
-            `).join('');
+                `).join('');
+            } else {
+                coursesContainer.innerHTML = '<div class="no-data">All courses enrolled!</div>';
+            }
         } else {
             console.log('No courses found');
             coursesContainer.innerHTML = '<div class="no-data">No courses available</div>';
@@ -332,69 +374,43 @@ async function initiatePayment(courseId, amount) {
     try {
         showLoading();
         
-        // Create payment order
+        // Create checkout session
         const formData = new FormData();
         formData.append('token', localStorage.getItem('token'));
         formData.append('course_id', courseId);
         formData.append('student_id', currentUser.id);
         
-        const response = await fetch(`${API_BASE_URL}/payment/create-order`, {
+        const response = await fetch(`${API_BASE_URL}/payment/create-checkout-session`, {
             method: 'POST',
             body: formData
         });
         
-        const order = await response.json();
+        const result = await response.json();
         
         if (!response.ok) {
-            throw new Error(order.detail || 'Payment order creation failed');
+            throw new Error(result.detail || 'Checkout session creation failed');
         }
         
         hideLoading();
         
-        // Initialize Stripe
-        const stripe = Stripe(order.stripe_publishable_key);
-        
-        // Confirm payment
-        const {error, paymentIntent} = await stripe.confirmCardPayment(order.client_secret, {
-            payment_method: {
-                card: {
-                    // Demo card details - in real app, use Stripe Elements
-                    number: '4242424242424242',
-                    exp_month: 12,
-                    exp_year: 2025,
-                    cvc: '123'
-                },
-                billing_details: {
-                    name: currentUser.name,
-                    email: currentUser.email
-                }
-            }
-        });
-        
-        if (error) {
-            throw new Error(error.message);
-        }
-        
-        if (paymentIntent.status === 'succeeded') {
-            await verifyPayment(paymentIntent.id);
-        }
+        // Redirect to Stripe Checkout
+        window.location.href = result.checkout_url;
         
     } catch (error) {
         hideLoading();
-        showToast('Payment failed: ' + error.message, 'error');
+        showToast('Payment initiation failed: ' + error.message, 'error');
     }
 }
 
-async function verifyPayment(paymentIntentId) {
+async function verifySessionPayment(sessionId) {
     try {
         showLoading();
         
         const formData = new FormData();
         formData.append('token', localStorage.getItem('token'));
-        formData.append('payment_intent_id', paymentIntentId);
-        formData.append('student_id', currentUser.id);
+        formData.append('session_id', sessionId);
         
-        const response = await fetch(`${API_BASE_URL}/payment/verify-payment`, {
+        const response = await fetch(`${API_BASE_URL}/payment/verify-session`, {
             method: 'POST',
             body: formData
         });
@@ -405,8 +421,11 @@ async function verifyPayment(paymentIntentId) {
         
         if (response.ok) {
             showToast('Payment successful! Course enrolled.', 'success');
-            await loadEnrolledCourses();
-            await loadAvailableCourses();
+            // Reload both sections to reflect changes
+            await Promise.all([
+                loadEnrolledCourses(),
+                loadAvailableCourses()
+            ]);
         } else {
             throw new Error(result.detail || 'Payment verification failed');
         }
@@ -414,6 +433,37 @@ async function verifyPayment(paymentIntentId) {
     } catch (error) {
         hideLoading();
         showToast('Payment verification failed: ' + error.message, 'error');
+    }
+}
+
+// Handle payment success from URL parameters
+function handlePaymentSuccess() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id');
+    const paymentStatus = urlParams.get('payment');
+    const pendingSessionId = localStorage.getItem('pending_session_id');
+    
+    if (paymentStatus === 'success' && sessionId) {
+        showToast('Payment successful! Verifying enrollment...', 'success');
+        if (currentUser) {
+            verifySessionPayment(sessionId);
+        } else {
+            localStorage.setItem('pending_session_id', sessionId);
+        }
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (paymentStatus === 'cancelled') {
+        showToast('Payment was cancelled', 'warning');
+        window.history.replaceState({}, document.title, window.location.pathname);
+    } else if ((sessionId || pendingSessionId) && currentUser) {
+        const finalSessionId = sessionId || pendingSessionId;
+        verifySessionPayment(finalSessionId);
+        
+        // Clean up
+        localStorage.removeItem('pending_session_id');
+        if (sessionId) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
     }
 }
 
@@ -463,6 +513,8 @@ async function logout() {
         showToast('Logged out successfully', 'success');
         
         currentUser = null;
+        localStorage.removeItem('token');
+        localStorage.removeItem('currentUser');
         showPage('login-page');
         
         // Clear forms
@@ -559,6 +611,8 @@ function handleLoginForm(event) {
         password: document.getElementById('login-password').value
     };
     
+    console.log('Login attempt:', credentials.email);
+    
     if (!credentials.email || !credentials.password) {
         showToast('Please fill in all fields', 'error');
         return;
@@ -588,6 +642,31 @@ function handleVerifyForm(event) {
 
 // Event Listeners
 document.addEventListener('DOMContentLoaded', function() {
+    // Check if user is already logged in
+    const token = localStorage.getItem('token');
+    const userData = localStorage.getItem('currentUser');
+    
+    if (token && userData) {
+        try {
+            currentUser = JSON.parse(userData);
+            document.getElementById('user-name').textContent = `Welcome, ${currentUser.name}`;
+            
+            const roleBadge = document.getElementById('user-role');
+            roleBadge.textContent = currentUser.role;
+            roleBadge.className = `role-badge ${currentUser.role.toLowerCase()}`;
+            
+            showPage('dashboard-page');
+            showRoleBasedDashboard(currentUser.role);
+        } catch (error) {
+            // Clear invalid data
+            localStorage.removeItem('token');
+            localStorage.removeItem('currentUser');
+        }
+    }
+    
+    // Handle payment success on page load
+    handlePaymentSuccess();
+    
     // Form submissions
     document.getElementById('register-form').addEventListener('submit', handleRegisterForm);
     document.getElementById('login-form').addEventListener('submit', handleLoginForm);
@@ -610,6 +689,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     document.getElementById('course-form').addEventListener('submit', handleCourseForm);
+    
+    // Video form events
+    document.getElementById('cancel-video').addEventListener('click', function() {
+        document.getElementById('video-form-container').classList.add('hidden');
+        document.getElementById('video-form').reset();
+    });
+    
+    document.getElementById('video-form').addEventListener('submit', handleVideoForm);
     
     // Student Dashboard Events
     document.getElementById('search-btn').addEventListener('click', function() {
@@ -655,12 +742,14 @@ function handleCourseForm(event) {
     event.preventDefault();
     
     const thumbnailFile = document.getElementById('course-thumbnail').files[0];
+    const videoFiles = document.getElementById('course-videos').files;
     
     const courseData = {
         title: document.getElementById('course-title').value.trim(),
         description: document.getElementById('course-description').value.trim(),
         price: parseFloat(document.getElementById('course-price').value),
-        thumbnail: thumbnailFile || null
+        thumbnail: thumbnailFile || null,
+        videos: Array.from(videoFiles)
     };
     
     // Validation
@@ -670,6 +759,58 @@ function handleCourseForm(event) {
     }
     
     createCourse(courseData);
+}
+
+function handleVideoForm(event) {
+    event.preventDefault();
+    
+    const videoFile = document.getElementById('video-file').files[0];
+    
+    const videoData = {
+        courseId: document.getElementById('video-course-id').value,
+        title: document.getElementById('video-title').value.trim(),
+        description: document.getElementById('video-description').value.trim(),
+        videoFile: videoFile
+    };
+    
+    // Validation
+    if (!videoData.title || !videoData.description || !videoData.videoFile) {
+        showToast('Please fill in all fields', 'error');
+        return;
+    }
+    
+    uploadVideo(videoData);
+}
+
+// Upload multiple videos to course
+async function uploadCourseVideos(courseId, videoFiles) {
+    try {
+        for (let i = 0; i < videoFiles.length; i++) {
+            const videoFile = videoFiles[i];
+            const videoTitle = videoFile.name.replace(/\.[^/.]+$/, ""); // Remove extension
+            
+            const formData = new FormData();
+            formData.append('token', localStorage.getItem('token'));
+            formData.append('course_id', courseId);
+            formData.append('title', videoTitle);
+            formData.append('description', `Video ${i + 1}`);
+            formData.append('video_file', videoFile);
+            
+            const response = await fetch(`${API_BASE_URL}/courses/add-video`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || `Failed to upload ${videoFile.name}`);
+            }
+            
+            showToast(`Uploaded: ${videoFile.name}`, 'success');
+        }
+    } catch (error) {
+        showToast(`Video upload error: ${error.message}`, 'error');
+    }
 }
 
 // Helper Functions
@@ -715,3 +856,73 @@ document.addEventListener('keydown', function(e) {
 // Initialize app
 console.log('Learning Platform Frontend Initialized');
 showToast('Welcome to Learning Platform', 'info');
+
+// Course learning function
+function startCourse(courseId) {
+    if (!courseId) {
+        showToast('Invalid course ID', 'error');
+        return;
+    }
+    
+    // Redirect to course player page
+    window.location.href = `course-player.html?course_id=${courseId}`;
+}
+
+// Manual payment verification
+function manualVerifyPayment() {
+    const sessionId = prompt('Enter your Stripe session ID (from the URL after payment):');
+    if (sessionId && sessionId.startsWith('cs_')) {
+        verifySessionPayment(sessionId);
+    } else {
+        showToast('Invalid session ID format', 'error');
+    }
+}
+
+// Video upload functions
+function addVideo(courseId) {
+    console.log('Adding video to course:', courseId);
+    if (!courseId || courseId === 'undefined') {
+        showToast('Invalid course ID', 'error');
+        return;
+    }
+    document.getElementById('video-course-id').value = courseId;
+    document.getElementById('video-form-container').classList.remove('hidden');
+}
+
+async function uploadVideo(videoData) {
+    try {
+        showLoading();
+        
+        const formData = new FormData();
+        formData.append('token', localStorage.getItem('token'));
+        formData.append('course_id', videoData.courseId);
+        formData.append('title', videoData.title);
+        formData.append('description', videoData.description);
+        formData.append('video_file', videoData.videoFile);
+        
+        const response = await fetch(`${API_BASE_URL}/courses/add-video`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.detail || 'Video upload failed');
+        }
+        
+        showToast('Video uploaded successfully', 'success');
+        
+        // Hide form and reload courses
+        document.getElementById('video-form-container').classList.add('hidden');
+        document.getElementById('video-form').reset();
+        await loadTeacherCourses();
+        
+        return result;
+    } catch (error) {
+        showToast(error.message, 'error');
+        throw error;
+    } finally {
+        hideLoading();
+    }
+}

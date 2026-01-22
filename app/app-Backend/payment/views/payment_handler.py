@@ -1,11 +1,11 @@
-from fastapi import HTTPException, Form
+from fastapi import HTTPException, Form, Request
 from pydantic import BaseModel
 from core.database import courses_collection, db
 from helperFunction.jwt_helper import verify_token
-from core.config import STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY
 from bson import ObjectId
 import stripe
 from datetime import datetime
+from core.config import STRIPE_SECRET_KEY
 
 # Create payments collection
 payments_collection = db.payments
@@ -13,15 +13,12 @@ payments_collection = db.payments
 # Initialize Stripe
 stripe.api_key = STRIPE_SECRET_KEY
 
-class PaymentResponse(BaseModel):
-    payment_id: str
-    client_secret: str
-    amount: int
-    currency: str
+class CheckoutResponse(BaseModel):
+    checkout_url: str
+    session_id: str
     status: str
-    stripe_publishable_key: str
 
-async def create_payment_order(
+async def create_checkout_session(
     token: str = Form(...),
     course_id: str = Form(...),
     student_id: str = Form(...)
@@ -30,7 +27,6 @@ async def create_payment_order(
         # Verify token
         payload = verify_token(token)
         
-        # Check if token user matches student_id
         if payload.get("user_id") != student_id:
             raise HTTPException(status_code=403, detail="Unauthorized")
         
@@ -39,16 +35,27 @@ async def create_payment_order(
         if not course:
             raise HTTPException(status_code=404, detail="Course not found")
         
-        # Convert price to cents (Stripe uses smallest currency unit)
-        amount_cents = int(course["price"] * 100)
+        # Create line items for Stripe Checkout
+        line_items = [{
+            "price_data": {
+                "currency": "usd",
+                "unit_amount": int(course["price"] * 100),  # Convert to cents
+                "product_data": {
+                    "name": course["title"],
+                    "description": course["description"],
+                    "images": [course.get("thumbnail", "https://via.placeholder.com/300x200")]
+                }
+            },
+            "quantity": 1
+        }]
         
-        # Create Stripe PaymentIntent with explicit configuration
-        payment_intent = stripe.PaymentIntent.create(
-            amount=amount_cents,
-            currency="usd",
+        # Create Stripe Checkout Session
+        checkout_session = stripe.checkout.Session.create(
             payment_method_types=["card"],
-            capture_method="automatic",
-            confirmation_method="automatic",
+            line_items=line_items,
+            mode="payment",
+            success_url="http://127.0.0.1:5500/app/app-Frontend/index.html?session_id={CHECKOUT_SESSION_ID}&payment=success",
+            cancel_url="http://127.0.0.1:5500/app/app-Frontend/index.html?payment=cancelled",
             metadata={
                 "course_id": course_id,
                 "student_id": student_id,
@@ -56,109 +63,126 @@ async def create_payment_order(
             }
         )
         
-        # Store payment record
+        # Store checkout session in database
         payment_data = {
-            "stripe_payment_intent_id": payment_intent["id"],
+            "stripe_session_id": checkout_session["id"],
             "course_id": ObjectId(course_id),
             "student_id": ObjectId(student_id),
             "amount": course["price"],
-            "amount_cents": amount_cents,
+            "amount_cents": int(course["price"] * 100),
             "currency": "usd",
-            "status": "created",
+            "status": "pending",
             "created_at": datetime.utcnow()
         }
         
-        result = await payments_collection.insert_one(payment_data)
+        await payments_collection.insert_one(payment_data)
         
-        return PaymentResponse(
-            payment_id=str(result.inserted_id),
-            client_secret=payment_intent["client_secret"],
-            amount=amount_cents,
-            currency="usd",
-            status="created",
-            stripe_publishable_key=STRIPE_PUBLISHABLE_KEY
+        return CheckoutResponse(
+            checkout_url=checkout_session["url"],
+            session_id=checkout_session["id"],
+            status="created"
         )
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Payment order creation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Checkout session creation failed: {str(e)}")
 
-async def verify_payment(
-    token: str = Form(...),
-    payment_intent_id: str = Form(...),
-    student_id: str = Form(...)
+async def verify_session_payment(
+    session_id: str = Form(...),
+    token: str = Form(...)
 ):
-    try:
-        # Verify token
-        payload = verify_token(token)
-        
-        # Check if token user matches student_id
-        if payload.get("user_id") != student_id:
-            raise HTTPException(status_code=403, detail="Unauthorized")
-        
-        # Retrieve PaymentIntent from Stripe
-        try:
-            payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
-        except stripe.error.InvalidRequestError as e:
-            if "No such payment_intent" in str(e):
-                raise HTTPException(
-                    status_code=404, 
-                    detail=f"Payment intent '{payment_intent_id}' not found. Please create a new payment order first."
-                )
-            raise HTTPException(status_code=400, detail=f"Invalid payment intent: {str(e)}")
-        
-        if payment_intent["status"] != "succeeded":
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Payment not completed. Current status: {payment_intent['status']}"
-            )
-        
-        # Find payment record
-        payment = await payments_collection.find_one({"stripe_payment_intent_id": payment_intent_id})
-        if not payment:
-            raise HTTPException(
-                status_code=404, 
-                detail="Payment record not found in database. Please contact support."
-            )
-        
-        # Update payment status
-        await payments_collection.update_one(
-            {"_id": payment["_id"]},
-            {
-                "$set": {
-                    "status": "completed",
-                    "completed_at": datetime.utcnow()
-                }
-            }
-        )
-        
-        # Auto-enroll student in course after successful payment
-        from course.views.enrollment import enroll_course_after_payment
-        await enroll_course_after_payment(str(payment["course_id"]), student_id)
-        
-        return {
-            "message": "Payment verified and course enrolled successfully",
-            "status": "success",
-            "payment_intent_id": payment_intent_id
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Payment verification failed: {str(e)}")
-
-async def get_payment_status(payment_id: str, token: str = Form(...)):
     try:
         # Verify token
         verify_token(token)
         
-        # Get payment status
+        # Retrieve session from Stripe
+        session = stripe.checkout.Session.retrieve(session_id)
+        
+        if session.payment_status != "paid":
+            raise HTTPException(status_code=400, detail="Payment not completed")
+        
+        # Update local payment record
+        payment = await payments_collection.find_one({"stripe_session_id": session_id})
+        if not payment:
+            raise HTTPException(status_code=404, detail="Payment record not found")
+        
+        if payment["status"] != "completed":
+            await payments_collection.update_one(
+                {"_id": payment["_id"]},
+                {
+                    "$set": {
+                        "status": "completed",
+                        "completed_at": datetime.utcnow(),
+                        "stripe_payment_intent_id": session.payment_intent
+                    }
+                }
+            )
+            
+            # Auto-enroll student
+            from course.views.enrollment import enroll_course_after_payment
+            await enroll_course_after_payment(
+                str(payment["course_id"]), 
+                str(payment["student_id"])
+            )
+        
+        return {
+            "message": "Payment verified and course enrolled successfully",
+            "status": "success",
+            "session_id": session_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Session verification failed: {str(e)}")
+
+async def handle_webhook(request: Request):
+    try:
+        payload = await request.body()
+        sig_header = request.headers.get('stripe-signature')
+        
+        # Verify webhook signature (in production, use webhook secret)
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, "whsec_your_webhook_secret_here"
+        )
+        
+        if event['type'] == 'checkout.session.completed':
+            session = event['data']['object']
+            
+            # Update payment status
+            await payments_collection.update_one(
+                {"stripe_session_id": session['id']},
+                {
+                    "$set": {
+                        "status": "completed",
+                        "completed_at": datetime.utcnow(),
+                        "stripe_payment_intent_id": session.get('payment_intent')
+                    }
+                }
+            )
+            
+            # Get payment record for enrollment
+            payment = await payments_collection.find_one({"stripe_session_id": session['id']})
+            if payment:
+                # Auto-enroll student
+                from course.views.enrollment import enroll_course_after_payment
+                await enroll_course_after_payment(
+                    str(payment["course_id"]), 
+                    str(payment["student_id"])
+                )
+        
+        return {"status": "success"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Webhook error: {str(e)}")
+
+async def get_payment_status(payment_id: str, token: str = Form(...)):
+    try:
+        verify_token(token)
         payment = await payments_collection.find_one({"_id": ObjectId(payment_id)})
         if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
         
         return {
             "payment_id": str(payment["_id"]),
-            "stripe_payment_intent_id": payment["stripe_payment_intent_id"],
+            "stripe_session_id": payment.get("stripe_session_id"),
             "amount": payment["amount"],
             "status": payment["status"],
             "created_at": payment["created_at"].isoformat()

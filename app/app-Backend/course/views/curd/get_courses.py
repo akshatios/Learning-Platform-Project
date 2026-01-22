@@ -6,11 +6,9 @@ from bson import ObjectId
 
 async def get_courses():
     try:
-        print("Starting get_courses function")
         # Get all courses from database
         courses_cursor = courses_collection.find({})
         courses = await courses_cursor.to_list(length=None)
-        print(f"Found {len(courses)} courses")
         
         course_list = []
         for course in courses:
@@ -29,18 +27,12 @@ async def get_courses():
                     "enrolled_count": course.get("enrolled_count", 0)
                 }
                 course_list.append(course_data)
-            except Exception as course_error:
-                print(f"Error processing course {course.get('_id')}: {course_error}")
+            except Exception:
                 continue
         
-        result = {"courses": course_list, "total": len(course_list)}
-        print(f"Returning result: {result}")
-        return result
+        return {"courses": course_list, "total": len(course_list)}
         
     except Exception as e:
-        print(f"Error in get_courses: {str(e)}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to fetch courses: {str(e)}")
 
 async def get_teacher_courses(teacher_id: str, token: str = Query(...)):
@@ -59,7 +51,7 @@ async def get_teacher_courses(teacher_id: str, token: str = Query(...)):
         course_list = []
         for course in courses:
             course_data = {
-                "id": str(course["_id"]),
+                "_id": str(course["_id"]),
                 "title": course["title"],
                 "description": course["description"],
                 "category": course.get("category", ""),
